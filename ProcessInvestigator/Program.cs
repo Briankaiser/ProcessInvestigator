@@ -174,6 +174,34 @@ namespace ProcessInvestigator
                                 }
                                 break;
                             }
+                        case "threadpool":
+                            {
+                                if (currentPid == -1)
+                                {
+                                    Console.WriteLine("Could not find process by name");
+                                    break;
+                                }
+                                using (DataTarget dt = DataTarget.AttachToProcess(currentPid, 5000, AttachFlag.NonInvasive))
+                                {
+                                    dt.DebuggerInterface.SetProcessOptions(DEBUG_PROCESS.DETACH_ON_EXIT);
+                                    if (dt.ClrVersions.Count == 0)
+                                    {
+                                        Console.WriteLine("Process is probably not running in the CLR");
+                                        break;
+                                    }
+                                    string dacLocation = dt.ClrVersions[0].TryGetDacLocation();
+                                    if (string.IsNullOrEmpty(dacLocation))
+                                        dacLocation = dt.ClrVersions[0].DacInfo.FileName;
+
+
+                                    ClrRuntime runtime = dt.CreateRuntime(dacLocation);
+                                    var pool = runtime.GetThreadPool();
+                                    Console.WriteLine("CPU: {0}%", pool.CpuUtilization);
+                                    Console.WriteLine("Threads - Running:{0} Idle:{1} Max: {2} ", pool.RunningThreads, pool.IdleThreads, pool.MaxThreads);
+                                    dt.DebuggerInterface.DetachProcesses();
+                                }
+                                break;
+                            }
                         case "quit":
                         case "exit":
                             {
@@ -186,8 +214,11 @@ namespace ProcessInvestigator
                 }
                 catch (ClrDiagnosticsException diagEx)
                 {
-                    Console.WriteLine("Exception running command:");
+                    Console.WriteLine("Exception running command");
+                    Console.WriteLine("===========================");
                     Console.WriteLine(diagEx.Message);
+                    Console.WriteLine();
+                    Console.WriteLine("Might want to shutdown and try again in a bit....");
                 }
                 
             } //end while
