@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Management;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Diagnostics.Runtime;
@@ -43,7 +44,7 @@ namespace ProcessInvestigator
                         case "help":
                             {
                                 Console.WriteLine("Commands:");
-                                Console.WriteLine("List - list running processes");
+                                Console.WriteLine("List <optional true/false to include command line> - list running processes");
                                 Console.WriteLine("Stack <Pid|ProcessName> <optional search phase> - prints CLR stack traces");
                                 Console.WriteLine("Heap <Pid|ProcessName> <optional search phase> - prints heap allocations");
                                 Console.WriteLine("ThreadPool <Pid|ProcessName> - prints ThreadPool information");
@@ -54,9 +55,23 @@ namespace ProcessInvestigator
                         case "list":
                             {
                                 Console.WriteLine("Processes:");
+                                bool listCommand = "true".Equals(secondPartCommand, StringComparison.OrdinalIgnoreCase);
+
                                 foreach (var p in Process.GetProcesses().OrderBy(p => p.ProcessName))
                                 {
-                                    Console.WriteLine("{0}\t{1}\t{2} {3}", p.Id, p.ProcessName, p.StartInfo.FileName, p.StartInfo.Arguments);
+                                    string commandLine = "";
+                                    if (listCommand)
+                                    {
+                                        using (var searcher = new ManagementObjectSearcher("SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + p.Id))
+                                        {
+                                            foreach (ManagementObject @object in searcher.Get())
+                                            {
+                                                commandLine = commandLine + @object["CommandLine"] + " ";
+                                            }
+                                        }
+                                    }
+
+                                    Console.WriteLine("{0}\t{1}\t{2}", p.Id, p.ProcessName, commandLine);
                                 }
                                 Console.WriteLine();
                                 break;
@@ -71,6 +86,7 @@ namespace ProcessInvestigator
                                 string searchPhase = commandSplit.Length > 2 ? string.Join(" ", commandSplit.Skip(2)): null;
                                 using (DataTarget dt = DataTarget.AttachToProcess(currentPid, 5000, AttachFlag.NonInvasive))
                                 {
+                                    dt.DebuggerInterface.SetProcessOptions(DEBUG_PROCESS.DETACH_ON_EXIT);
                                     if (dt.ClrVersions.Count == 0)
                                     {
                                         Console.WriteLine("Process is probably not running in the CLR");
@@ -105,6 +121,7 @@ namespace ProcessInvestigator
 
                                         Console.WriteLine();
                                     }
+                                    dt.DebuggerInterface.DetachProcesses();
                                 }
                                 break;
                             }
@@ -118,6 +135,7 @@ namespace ProcessInvestigator
                                 string searchPhase = commandSplit.Length > 2 ? string.Join(" ", commandSplit.Skip(2)) : null;
                                 using (DataTarget dt = DataTarget.AttachToProcess(currentPid, 5000, AttachFlag.NonInvasive))
                                 {
+                                    dt.DebuggerInterface.SetProcessOptions(DEBUG_PROCESS.DETACH_ON_EXIT);
                                     if (dt.ClrVersions.Count == 0)
                                     {
                                         Console.WriteLine("Process is probably not running in the CLR");
@@ -152,7 +170,7 @@ namespace ProcessInvestigator
                                     }
 
 
-
+                                    dt.DebuggerInterface.DetachProcesses();
                                 }
                                 break;
                             }
